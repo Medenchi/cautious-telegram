@@ -3,21 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Имбулечка 3000</title>
+    <title>Имбулечка</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
         
         body, html {
             height: 100%;
             margin: 0;
-            font-family: 'Roboto', sans-serif;
-            background-color: #121212;
-            color: #e0e0e0;
+            font-family: 'Inter', sans-serif;
+            color: #ffffff;
             display: flex;
             justify-content: center;
             align-items: center;
             text-align: center;
             overflow: hidden;
+            background: linear-gradient(315deg, #0f0c29, #302b63, #24243e);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
 
         .container {
@@ -28,6 +36,19 @@
             width: 90%;
             max-width: 800px;
             height: 95%;
+            backdrop-filter: blur(10px);
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 24px;
+            padding: 20px;
+            box-sizing: border-box;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .header h1 {
+            font-weight: 700;
+            font-size: 2.5em;
+            margin: 0;
+            opacity: 0.9;
         }
 
         #player-container {
@@ -35,6 +56,169 @@
             aspect-ratio: 16 / 9;
             background-color: #000;
             border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            transition: opacity 0.5s ease-in-out;
+            opacity: 0;
+        }
+        
+        #player-container.visible {
+            opacity: 1;
+        }
+
+        #player {
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        .controls {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #micButton {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: none;
+            background: #5865f2;
+            color: white;
+            font-size: 50px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+
+        #micButton:hover { transform: scale(1.1); }
+        #micButton.listening {
+            background: #ed4245;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(237, 66, 69, 0.7); }
+            70% { box-shadow: 0 0 0 25px rgba(237, 66, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(237, 66, 69, 0); }
+        }
+
+        .status-text {
+            margin-top: 25px;
+            font-size: 1.3em;
+            font-weight: 500;
+            min-height: 50px;
+            transition: opacity 0.3s;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>Имбулечка</h1>
+        </div>
+        <div id="player-container">
+            <div id="player"></div>
+        </div>
+        <div class="controls">
+            <button id="micButton">🎤</button>
+            <p id="status" class="status-text">Нажми и скажи что-нибудь</p>
+        </div>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        const micButton = document.getElementById('micButton');
+        const statusText = document.getElementById('status');
+        const playerContainer = document.getElementById('player-container');
+        const serverUrl = '/process_command';
+        let player;
+        let isListening = false;
+        let synthesis = window.speechSynthesis;
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+                height: '100%',
+                width: '100%',
+                playerVars: { 'autoplay': 1, 'controls': 1, 'iv_load_policy': 3 },
+            });
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            statusText.textContent = "Браузер не поддерживает распознавание речи.";
+        }
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ru-RU';
+        recognition.interimResults = false;
+
+        micButton.addEventListener('click', () => {
+            if (isListening) {
+                recognition.stop();
+            } else {
+                try {
+                    synthesis.cancel();
+                    recognition.start();
+                } catch(e) {
+                    statusText.textContent = "Не могу начать слушать, попробуй снова.";
+                }
+            }
+        });
+
+        recognition.onstart = () => {
+            isListening = true;
+            micButton.classList.add('listening');
+            statusText.textContent = 'Слушаю тебя, дружочек...';
+        };
+        recognition.onend = () => {
+            isListening = false;
+            micButton.classList.remove('listening');
+            statusText.textContent = 'Нажми и скажи что-нибудь';
+        };
+        recognition.onerror = () => { statusText.textContent = 'Ой, ошибочка с микрофоном.'; }
+        recognition.onresult = (event) => { sendCommandToServer(event.results[0][0].transcript); };
+        
+        async function sendCommandToServer(command) {
+            statusText.textContent = 'Думаю... 🤔';
+            try {
+                const response = await fetch(serverUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: command })
+                });
+                const data = await response.json();
+
+                if (data.type === 'music' && data.videoId) {
+                    speak(data.text);
+                    playerContainer.classList.add('visible');
+                    player.loadVideoById(data.videoId);
+                    statusText.textContent = `${data.artist} - ${data.title}`;
+                } else if (data.type === 'talk') {
+                    speak(data.text);
+                    statusText.textContent = data.text;
+                }
+            } catch (error) {
+                const errorText = 'Ой, не могу достучаться до сервера!';
+                speak(errorText);
+                statusText.textContent = errorText;
+            }
+        }
+        
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ru-RU';
+            synthesis.speak(utterance);
+        }
+    </script>
+</body>
+</html>            border-radius: 12px;
             overflow: hidden;
             margin-bottom: 20px;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
